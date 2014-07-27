@@ -1,0 +1,11 @@
+Need hard and fast standards, e.g. if naming of say variables constantly changes there's a huge workload added to the overhead from
+changing the codebase to accomodate those changes to simple naming.  
+
+Under consideration:
+------------
+not having vars "mech, robo, bio" instead "Lockable, Spawnable, Irradable"
+missing only when not known or very much N/A (as in it would be totally wrong to put any allowable value) otherwise things like 0
+prefer two binaries to one trinary but 4+ nominal, start at 0 or at 1?
+CamelCase with no spaces or abbrev
+3 columns for primkey, UnitName DamageMethod and Modifiers, sorresponding to the delimiters of unit_wp  This would mean upgrades seperate ds
+adjusting for heal/regen/repair to get "sitting duck toughness"
