@@ -1,8 +1,15 @@
-/*    *** Utility: Load data ***     
-libname titanic 'C:\Users\anhutz\Desktop\msa\nonTS projects\titanic'; 
-data master;
-set titanic.master;
-run;
+
+/* Legend/Sections:
+    1. Data Dictionary
+    2. Training data from titanic_core.csv ONLY (i.e. not even seeing the kaggle-actual-holdout)
+    3. Snippets and comments about building FAMILIES 
+    4. "partioning" i.e. creating own (first) role variable within MASTER which like #2 is on true-train-only titanic_core.csv
+    5. orphaned addition of VARIABLES
+*/
+
+
+*1;
+
 /*    *** Data Dictionary ***      
 VARIABLE DESCRIPTIONS:
 survival        Survival
@@ -42,7 +49,13 @@ only with a nanny, therefore parch=0 for them.  As well, some
 travelled with very close friends or neighbors in a village, however,
 the definitions do not support such relations.
 */
+
+
+
+*2;
+
 libname titanic 'C:\Users\anhutz\Desktop\msa\nonTS projects\titanic';
+
 
 data /*titanic.*/train;
 infile 'C:\Users\anhutz\Desktop\msa\nonTS projects\titanic\titanic_core.csv' dsd firstobs=2;
@@ -57,6 +70,9 @@ run;
 
 proc print; where age=. or int(age)^=age; run;
 proc print; where find(name,'master','i'); run;
+
+
+*3;
 
 proc sql;
 create table fams as /*first attempt at building families.  If poss shooting for no misclassification, no false pos (think a nonfam is a fam) no false negs (fam rel not caught)*/
@@ -79,10 +95,17 @@ quit;  *so for these odd male names, look for a blank space between any paren or
 
 
 
+*4;
+
 /*********  PARTITIONING  *********/
 /*********  PARTITIONING  *********/
 /*********  PARTITIONING  *********/
 
+/*    shortcut directly to permanent version of ds master *     
+data master;
+set titanic.master;
+run;
+*/;
 data /*titanic.*/master;
 infile 'C:\Users\anhutz\Desktop\msa\nonTS projects\titanic\titanic_core.csv' dsd firstobs=2;
 length survived 8	pclass 8	name $ 100	sex	$ 6 age 8	sibsp 8	parch 8	ticket $ 20	fare 8	cabin $ 20	embarked $ 1;
@@ -104,6 +127,13 @@ if embarked=" " then embnum=.; else if embarked="S" then embnum=1; else if embar
 
 run;
 
+data test1;
+set /*titanic.*/master;
+WHERE role1="test";
+run;
+
+
+*5;
 
 /*********  VARIABLES  *********/
 /*********  VARIABLES  *********/
