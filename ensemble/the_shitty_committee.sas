@@ -1,18 +1,15 @@
 
-*proposal is to make modules for each model type (some of which will be variant calls
- of, say, a neural net module) allowing the various inputs to be plugged in.  An aggregator
- to append each results table (each of which will have the primary key of time along with
- at least one column to describe the results in a normalized data sense (e.g. a col for
- model technology and another for which input).  ;
+* -modules for each model type (some of which will be variant calls of, say, a neural net module (i.e. by shortness, shortness affects model architecture)) 
+  -allowing variation over inputs plugged in.  
+  -Each module run pushes results table (each of which MIGHT have the primary key of time along with housekeeping (minimum: a col for model technology and another for which input))  ;
 
-*all my implementations are time series, so there's a possiblity of just passing in the 
-response variables name as a string and having a convention for appellations to that.  E.g.
-let voi=price , with the first appellation being lag (contrary to production_glarima in which
-the first suffix is the power the var is taken to).
-However there are exogenous variables, but in electric load it acts very similar to the response
-var so all I would need is the name, could call it x;
+*  -all my possible uses are time series
+   --can just pass in the response variables name as a string and having a convention for appellations to that.  E.g. let voi=price , with the 
+      first appellation being lag (contrary to production_glarima in which the first suffix is the power the var is taken to).
+   ---However there are exogenous variables, but in electric load it acts very similar to the response
+       var so all I would need is the name, call it x;
 
-*will need to do exploration (Specifically ACF plots and spectral analysis) to determine which
+*will absolutely have to do exploration (Specifically ACF plots and spectral analysis) to determine which
  lags to put in the var_list;
 
 *common api
@@ -35,34 +32,47 @@ set &_out.(keep=&date_var. &voi. forecast where=(&voi=.));
 model_spec="A descriptor of this part of the ensemble";
 in_data="&_in.";
 run; 
-*might also want some form of diagnostic on a per-model basis, unless can cover this
- needed info adequately at the ensemble level;
+
 */
 
 
 
-* planning:
+* planned:
 shortness effect on flow of ARIMA
 ?add exo var list to housekeeping in _out or at the top?
-each module keep track of time --v
-what is shortness 3 for esm?  ---^
+what is shortness 3 for esm? 
 MERGE (NOT AppeNd, or rather both in a 2D thing) to central results (per problem run aka buckshot) each time
+ -what does 2D PUSHing mean for time: temp fix was to add it to results tables and append to long but not to wide, plan to have a wide time table
+clone this so that this becomes ShitCommCont, spawning ShitCommOrd, ShitCommNom
+changes made to template, on a weekend push them into a production macro e.g. arima
+test use of my obs utility (borrowed from GLARIMA)
+***iteration of run number is not working
 ;
 
 
+*known that this wont work the way I want it to YET, inline anywhere;
+%macro aj_obs(ds=);
+			proc sql noprint; 
+			select count(*) 
+			 into : inputnumobs 
+			 from &ds; 
+			quit;
+%mend aj_obs;
 
 
 
 
-
-
-
-%let fcst_hrz_increments=2000;
-%let voi0=lair;
 *central housekeeping/flow vars used over all comm members to 
   streamline each buckshot, side benefit these dont have to go into every _out
-let basedata=airline
+
 let justone_xvar=gdp;
+%let basedata=airline;
+%let fcst_hrz_increments=2000;
+%let voi0=lair;  *build out lags list here, would require spectral, before any modules run;
+*restart the run count;
+%symdel run;
+%let run=1;
+*clean & seed long, wide etc;
 
 
 
@@ -136,7 +146,7 @@ run;
 
 
 /***************** DEVELOPMENT SHIPYARD **********************/
-
+   /*** TEMPLATE ****/
 %macro module(_in=,      /*input dataset*/
               _out=,     /*output dataset*/
 			  voi=,      /*string, name of response variable*/
@@ -145,16 +155,92 @@ run;
 			  x=,        /*string, name of exogenous variable(s?)*/ 
               date_var=, 
               shortness= );/*1=medium, 2=short 3=very short*/
+%local this_model t0 t1;
+%let this_model=MODELTYPE_sh&shortness._modelspecificparms;
+%let t0= %sysfunc(datetime());
+proc means data=&_in;
+output out=&_out.;
+run; 
+data &_out;
+set &_out(keep=&date_var. &voi.);
+&date_var.=19000+_n_;
+run;
+%let t1= %sysfunc(datetime()); 
+%put TIME: time elapsed = %sysevalf(&t1 - &t0);
 
 *each module must paste on to its output the info about each run;
 data &_out.;
 set &_out.(keep=&date_var. &voi.);
-model_spec="MODELTYPE_sh&shortness._modelspecificparms";
+model_spec="&this_model";
 in_data="&_in.";
+elapsed_time=%sysevalf(&t1 - &t0);
 run; 
+proc append base=long_append data=&_out.;* force; run; 
 
-*diagnostic, timing, postproc e.g. date?;
+data _null_;
+*obs=%aj_obs(ds=&basedata.);
+run_key=round(sqrt(obs*&fcst_hrz_increments.))/*tells what data*/ 
+          + %sysevalf(&t1 - &t0)-today()*86400/*need to normalize time~~model*/;
+*overwrite, above likely will be deprecated; run_key=&run;
+model_spec_&run. ="&this_model";
+call symputx("model_spec_&run.",model_spec_&run.,'l');
+in_data_&run.="&_in.";
+call symputx("in_data_&run.",in_data_&run.,'l');
+elapsed_time_&run.=%sysevalf(&t1 - &t0);
+call symputx("elapsed_time_&run.",elapsed_time_&run.,'l');
+put _all_;
+run;
+%put Run Number     RUN                = &Run.;
+%put Macro Variable MODEL_SPEC_&Run.   = &&MODEL_SPEC_&Run.;
+%put Macro Variable IN_DATA_&Run.      = &&IN_DATA_&Run.;
+%put Macro Variable ELAPSED_TIME_&Run. = &&ELAPSED_TIME_&Run.;
+*iterate amper run, could be in above DS, call symputx('run',run_key+1,'g'), if the stimputs are removed;
+%let run=%eval(&run+1);
+
+
+data &_out_w.;
+set &_out.(/*keep all*/ rename=(&voi.=&voi._&run. 
+           /*might normalize datamart*/ model_spec=model_spec_&run. 
+           in_data=in_data_&run.
+           elapsed_time=elapsed_time_&run.)
+           );
+*might thin this to just voi, if macvars or another alternative to data-based housekeeping works well;
+run;
+
+ *time is a point in both the long append and the wide merge and
+   also has its own dedicated 2D table;
+data single_time;
+basedata=&basedata.;
+*obs=%aj_obs(ds=&basedata.);
+fcst_hrz_increments=&fcst_hrz_increments.;
+voi0=&voi0.;
+start_time=&t0.;
+model_spec="&this_model";
+in_data="&_in.";
+elapsed_time=%sysevalf(&t1 - &t0);
+run;
+proc append base=time_table data=single_time;* force; run; 
+
+*diagnostic, postproc e.g. date?;
+
 %mend module;
+
+   /*** ACTIVE DEVELOPMENT ****/
+
+
+
+
+
+%let _in=orig_3yr;  
+ %let     _out=esm3;     
+%let   voi=&voi0.;
+ %let     date_var=proxy_dt_trend; 
+ %let    shortness=3;
+
+ proc svm;
+ run;
+
+
 
    /*** EXAMPLES ****/
 
