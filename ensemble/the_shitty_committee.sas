@@ -44,21 +44,23 @@ what is shortness 3 for esm?
 MERGE (NOT AppeNd, or rather both in a 2D thing) to central results (per problem run aka buckshot) each time
  -what does 2D PUSHing mean for time: temp fix was to add it to results tables and append to long but not to wide, plan to have a wide time table
 clone this so that this becomes ShitCommCont, spawning ShitCommOrd, ShitCommNom
-changes made to template, on a weekend push them into a production macro e.g. arima
+  consider carefully plugging each model into template
+   -one pro is that template (i.e. housekeeping) could be easily changed
+   -major con would be model-specific api and architecture needs (e.g. esm noX, arima own lags, ML need more hand holding)
 test use of my obs utility (borrowed from GLARIMA)
-***iteration of run number is not working
 ;
 
 
 *known that this wont work the way I want it to YET, inline anywhere;
-%macro aj_obs(ds=);
-			proc sql noprint; 
-			select count(*) 
-			 into : inputnumobs 
-			 from &ds; 
-			quit;
+%macro aj_obs(ds);
+%local dstouch bs obs;
+     %let dstouch = %sysfunc(open(&ds));
+         %let anubis=%sysfunc(attrn(&dstouch, anobs));
+         %if &anubis= 1 %then
+              %let obs= %sysfunc(attrn(&dstouch, nlobs));
+     %let bs = %sysfunc(close(&dstouch));
+&obs
 %mend aj_obs;
-
 
 
 
@@ -73,9 +75,15 @@ let justone_xvar=gdp;
 %symdel run;
 %let run=1;
 *clean & seed long, wide etc;
-
-
-
+  *when seeding give character variables great length;
+data time_table;
+length obs fcst_hrz_increments 8 voi0 $ 40 start_time 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
+if _n_<1 then output;
+run; 
+data long_append;
+length &date_var. &voi. 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
+if _n_<1 then output;
+run;
 
 
 
@@ -175,13 +183,10 @@ model_spec="&this_model";
 in_data="&_in.";
 elapsed_time=%sysevalf(&t1 - &t0);
 run; 
-proc append base=long_append data=&_out.;* force; run; 
+proc append base=long_append data=&_out. ; run; 
 
 data _null_;
-*obs=%aj_obs(ds=&basedata.);
-run_key=round(sqrt(obs*&fcst_hrz_increments.))/*tells what data*/ 
-          + %sysevalf(&t1 - &t0)-today()*86400/*need to normalize time~~model*/;
-*overwrite, above likely will be deprecated; run_key=&run;
+run_key=&run;
 model_spec_&run. ="&this_model";
 call symputx("model_spec_&run.",model_spec_&run.,'l');
 in_data_&run.="&_in.";
@@ -194,35 +199,37 @@ run;
 %put Macro Variable MODEL_SPEC_&Run.   = &&MODEL_SPEC_&Run.;
 %put Macro Variable IN_DATA_&Run.      = &&IN_DATA_&Run.;
 %put Macro Variable ELAPSED_TIME_&Run. = &&ELAPSED_TIME_&Run.;
-*iterate amper run, could be in above DS, call symputx('run',run_key+1,'g'), if the stimputs are removed;
-%let run=%eval(&run+1);
 
 
-data &_out_w.;
-set &_out.(/*keep all*/ rename=(&voi.=&voi._&run. 
-           /*might normalize datamart*/ model_spec=model_spec_&run. 
+
+data &_out._w;
+set &_out.(/*keep all?*/ rename=(&voi.=&voi._&run. 
+           model_spec=model_spec_&run. 
            in_data=in_data_&run.
            elapsed_time=elapsed_time_&run.)
            );
+length model_spec_&run. $ 250 in_data_&run. 40;
 *might thin this to just voi, if macvars or another alternative to data-based housekeeping works well;
 run;
 
- *time is a point in both the long append and the wide merge and
-   also has its own dedicated 2D table;
+ *time table;
 data single_time;
-basedata=&basedata.;
-*obs=%aj_obs(ds=&basedata.);
+basedata="&basedata.";
+obs=%aj_obs(&_in.);
 fcst_hrz_increments=&fcst_hrz_increments.;
-voi0=&voi0.;
+voi0="&voi0.";
 start_time=&t0.;
 model_spec="&this_model";
 in_data="&_in.";
 elapsed_time=%sysevalf(&t1 - &t0);
 run;
-proc append base=time_table data=single_time;* force; run; 
+proc append base=time_table data=single_time; run; 
 
 *diagnostic, postproc e.g. date?;
 
+
+*iterate amper run, needs to be at the end of the module in case any housekeeping would like to use it;
+%let run=%eval(&run+1);
 %mend module;
 
    /*** ACTIVE DEVELOPMENT ****/
