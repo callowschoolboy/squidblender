@@ -48,6 +48,7 @@ clone this so that this becomes ShitCommCont, spawning ShitCommOrd, ShitCommNom
    -one pro is that template (i.e. housekeeping) could be easily changed
    -major con would be model-specific api and architecture needs (e.g. esm noX, arima own lags, ML need more hand holding)
 test use of my obs utility (borrowed from GLARIMA)
+***voi needs to be consolidated UP to TOP, as does date_var (consider use of a control ds)
 ;
 
 
@@ -55,9 +56,7 @@ test use of my obs utility (borrowed from GLARIMA)
 %macro aj_obs(ds);
 %local dstouch bs obs;
      %let dstouch = %sysfunc(open(&ds));
-         %let anubis=%sysfunc(attrn(&dstouch, anobs));
-         %if &anubis= 1 %then
-              %let obs= %sysfunc(attrn(&dstouch, nlobs));
+          %let obs= %sysfunc(attrn(&dstouch, nlobs));
      %let bs = %sysfunc(close(&dstouch));
 &obs
 %mend aj_obs;
@@ -77,7 +76,7 @@ let justone_xvar=gdp;
 *clean & seed long, wide etc;
   *when seeding give character variables great length;
 data time_table;
-length obs fcst_hrz_increments 8 voi0 $ 40 start_time 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
+length basedata $ 40 obs fcst_hrz_increments 8 voi0 $ 40 start_time 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
 if _n_<1 then output;
 run; 
 data long_append;
@@ -157,7 +156,7 @@ run;
    /*** TEMPLATE ****/
 %macro module(_in=,      /*input dataset*/
               _out=,     /*output dataset*/
-			  voi=,      /*string, name of response variable*/
+			  voi=&voi0.,      /*string, name of response variable*/
               lags=,     /*space delimited numeric lags representing VAR list*/
 			  x_flag=0,  /*0 we do NOT use an exovar, 1 we do*/
 			  x=,        /*string, name of exogenous variable(s?)*/ 
@@ -223,7 +222,7 @@ model_spec="&this_model";
 in_data="&_in.";
 elapsed_time=%sysevalf(&t1 - &t0);
 run;
-proc append base=time_table data=single_time; run; 
+proc append base=time_table data=single_time force; run; 
 
 *diagnostic, postproc e.g. date?;
 
@@ -234,8 +233,8 @@ proc append base=time_table data=single_time; run;
 
    /*** ACTIVE DEVELOPMENT ****/
 
-
-
+options mprint mprintnest mlogic mlogicnest nosymbolgen source notes;
+%module(_in=orig_3yr,_out=whatevah,date_var=proxy_dt_trend,shortness=1);
 
 
 %let _in=orig_3yr;  
@@ -243,6 +242,7 @@ proc append base=time_table data=single_time; run;
 %let   voi=&voi0.;
  %let     date_var=proxy_dt_trend; 
  %let    shortness=3;
+
 
  proc svm;
  run;
