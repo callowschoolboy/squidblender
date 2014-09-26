@@ -15,7 +15,7 @@ glob "eat" with "lunch"  !!! ;
  because of need for manual data cleaning only a small range of days parsed;
 data x;
 *infile 'C:\Users\anhutz\Desktop\new_again\self_data\ap_timelog\Planning is often but not always futile.csv' dsd;
-infile 'C:\Users\anhutz\Desktop\new_again\self_data\ap_timelog\planning2.csv' dsd; *or plan0.csv;
+infile 'C:\Users\anhutz\Desktop\msa\nonTS projects\self_data\ap_timelog\Planning is often but not always futile - Sheet1.csv' dsd; *or plan0.csv;
   INPUT @1 rectype $4. @ ;
    length theworddate $ 4 activity $ 32;
    drop theworddate rectype;
@@ -103,6 +103,8 @@ var dur_min; by date catgy;
 run; 
 data sumavg;
 set alttosql;
+*REVISIT: anything that has missing at this point give it zero;
+if dailysum=. then dailysum=0;
 avg=dailysum/_freq_;
 drop _type_ _freq_;
 run;
@@ -176,6 +178,9 @@ series x=date y=tot_known_time;
 series x=date y=work_pct / y2axis;
 run;
 
+proc sgplot data=series;
+series x=date y=break_sum;
+run;
 
 *going back closer to source, data isnt as dirty as I assumed it would be but there are some minor discrepancies;
 *such as an avg of 4 hours categorized per work day, cross referencing with granular data;
