@@ -67,9 +67,22 @@ test use of my obs utility (borrowed from GLARIMA)
   streamline each buckshot, side benefit these dont have to go into every _out
 
 let justone_xvar=gdp;
+proc datasets lib=work kill noprint nolist; run; quit;
+
+libname ts 'C:\Users\anhutz\Desktop\msa\TimeSeries\CLASS\class_data';
+data orig_3yr;
+set ts.airline;
+format date 8.;
+proxy_dt_trend=_n_;
+run; 
+
 %let basedata=airline;
 %let fcst_hrz_increments=2000;
-%let voi0=lair;  *build out lags list here, would require spectral, before any modules run;
+%let voi0=lair;  
+*build out lags list here, will require spectral, before any modules run;
+%let lags0=&voi0._1_1 &voi0._1_3 &voi0._1_8;
+*temporarily defining datevar just like voi.  plan to use an architecture ds, possibly search the basedata input to dynamically find the datevar...?;
+%let date_var=proxy_dt_trend;
 *restart the run count;
 %symdel run;
 %let run=1;
@@ -80,7 +93,7 @@ length basedata $ 40 obs fcst_hrz_increments 8 voi0 $ 40 start_time 8 model_spec
 if _n_<1 then output;
 run; 
 data long_append;
-length &date_var. &voi. 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
+length &date_var. &voi0. 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
 if _n_<1 then output;
 run;
 
@@ -154,10 +167,11 @@ run;
 
 /***************** DEVELOPMENT SHIPYARD **********************/
    /*** TEMPLATE ****/
-%macro module(_in=,      /*input dataset*/
+%macro module(modtech=means,  /*options are arima, means*/
+              _in=,      /*input dataset*/              
               _out=,     /*output dataset*/
 			  voi=&voi0.,      /*string, name of response variable*/
-              lags=,     /*space delimited numeric lags representing VAR list*/
+              lags=&lags0.,     /*space delimited numeric lags representing VAR list*/
 			  x_flag=0,  /*0 we do NOT use an exovar, 1 we do*/
 			  x=,        /*string, name of exogenous variable(s?)*/ 
               date_var=, 
@@ -165,13 +179,31 @@ run;
 %local this_model t0 t1;
 %let this_model=MODELTYPE_sh&shortness._modelspecificparms;
 %let t0= %sysfunc(datetime());
-proc means data=&_in;
-output out=&_out.;
-run; 
-data &_out;
-set &_out(keep=&date_var. &voi.);
-&date_var.=19000+_n_;
-run;
+*INSERT MODTECH HERE;
+	%if %sysevalf(&modtech="means",boolean) %then %do;
+		proc means data=&_in;
+		output out=&_out.;
+		run; 
+		data &_out;
+		set &_out(keep=&date_var. &voi.);
+		&date_var.=19000+_n_;
+		run;
+	%end;
+	%else %if %sysevalf(&modtech="arima",boolean) %then %do;
+	   %local dif; %let dif=0; *temporary, needs major cleaning and planning;
+		proc arima data=&_in.  plots=(none);
+		identify var=&voi.(&dif.) nlag=10 noprint;
+		estimate p=1 q=1 noprint;  *option to have short=3 mean 1-1 but others allow other 
+		lags (ie meaningful model). Also could have short>1 mean hpf, with 3 being more choking on it; 
+		forecast lead=&fcst_hrz_increments out=&_out. id=&date_var. interval=day noprint;
+		run;
+		*each module must paste on to its output the info about each run;
+		data &_out.;
+		set &_out.(keep=&date_var. &voi. forecast where=(&voi=.));
+		model_spec="ARIMA_p1_q1_d&dif._x0";
+		in_data="&_in.";
+		run; 
+	%end;
 %let t1= %sysfunc(datetime()); 
 %put TIME: time elapsed = %sysevalf(&t1 - &t0);
 
@@ -207,7 +239,7 @@ set &_out.(/*keep all?*/ rename=(&voi.=&voi._&run.
            in_data=in_data_&run.
            elapsed_time=elapsed_time_&run.)
            );
-length model_spec_&run. $ 250 in_data_&run. 40;
+length model_spec_&run. $ 250 in_data_&run. $ 40;
 *might thin this to just voi, if macvars or another alternative to data-based housekeeping works well;
 run;
 
@@ -234,7 +266,7 @@ proc append base=time_table data=single_time force; run;
    /*** ACTIVE DEVELOPMENT ****/
 
 options mprint mprintnest mlogic mlogicnest nosymbolgen source notes;
-%module(_in=orig_3yr,_out=whatevah,date_var=proxy_dt_trend,shortness=1);
+%module(modtech=arima,_in=orig_3yr,_out=whatevah,date_var=proxy_dt_trend,shortness=1);
 
 
 %let _in=orig_3yr;  
@@ -251,12 +283,7 @@ options mprint mprintnest mlogic mlogicnest nosymbolgen source notes;
 
    /*** EXAMPLES ****/
 
-libname ts 'C:\Users\anhutz\Desktop\msa\TimeSeries\CLASS\class_data';
-data orig_3yr;
-set ts.airline;
-format date 8.;
-proxy_dt_trend=_n_;
-run; 
+
 
 %let ForecastSeries = lz21;
 libname g 'C:\Users\anhutz\Desktop\msa\TimeSeries\PROJECTS\GEFCom2012\data';
