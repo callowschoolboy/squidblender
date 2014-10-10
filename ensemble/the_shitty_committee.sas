@@ -12,28 +12,8 @@
 *will absolutely have to do exploration (Specifically ACF plots and spectral analysis) to determine which
  lags to put in the var_list;
 
-*common api
-input dataset must have a naming convention that expresses "Orig v jitter v subsetted" etc for record keeping;
-*macro module(_in=,      /*input dataset*/
-              _out=,     /*output dataset*/
-			  voi=,      /*string, name of response variable*/
-              lags=,     /*space delimited numeric lags representing VAR list*/
-			  x_flag=0,  /*0 we do NOT use an exovar, 1 we do*/
-			  x=,        /*string, name of exogenous variable(s?)*/ 
-              date_var=, 
-              shortness= );/*1=medium, 2=short 3=very short*/
-;
-/*
-proc xyz;
 
-*each module must paste on to its output the info about each run;
-data &_out.;
-set &_out.(keep=&date_var. &voi. forecast where=(&voi=.));
-model_spec="A descriptor of this part of the ensemble";
-in_data="&_in.";
-run; 
 
-*/
 
 
 
@@ -49,6 +29,10 @@ clone this so that this becomes ShitCommCont, spawning ShitCommOrd, ShitCommNom
    -major con would be model-specific api and architecture needs (e.g. esm noX, arima own lags, ML need more hand holding)
 test use of my obs utility (borrowed from GLARIMA)
 ***voi needs to be consolidated UP to TOP, as does date_var (consider use of a control ds)
+
+ARIMA:
+*may go with hpfdiag for differencing etc
+*planning: try dif, exp with sh
 ;
 
 
@@ -83,11 +67,12 @@ run;
 %let lags0=&voi0._1_1 &voi0._1_3 &voi0._1_8;
 *temporarily defining datevar just like voi.  plan to use an architecture ds, possibly search the basedata input to dynamically find the datevar...?;
 %let date_var=proxy_dt_trend;
+
 *restart the run count;
 %symdel run;
 %let run=1;
+
 *clean & seed long, wide etc;
-  *when seeding give character variables great length;
 data time_table;
 length basedata $ 40 obs fcst_hrz_increments 8 voi0 $ 40 start_time 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
 if _n_<1 then output;
@@ -102,35 +87,6 @@ run;
 
 /*********** FINISHED MODULES **************/
 
-*may go with hpfdiag for differencing etc;
-%macro arima(_in=,      /*input dataset*/
-              _out=,     /*output dataset*/
-			  voi=&voi0.,/*string, name of response variable*/
-              lags=notusedbyarima,     /*lags_VAR list notusedbyarima*/
-			  x_flag=0,  /*0 we do NOT use an exovar, 1 we do*/
-			  x=,        /*string, name of exogenous variable(s?)*/  
-              shortness=notYETusedbyarima,
-              date_var=date, 
-
-			  /*ARIMA-specific*/
-              dif=0);     /*the numeric 1st difference BY to pass to the arima call in &voi(&dif)*/
-%local t0 t1;
-%let t0= %sysfunc(datetime());
-proc arima data=&_in.  plots=(none);
-identify var=&voi.(&dif.) nlag=10 noprint;
-estimate p=1 q=1 noprint;  *option to have short=3 mean 1-1 but others allow other 
-lags (ie meaningful model). Also could have short>1 mean hpf, with 3 being more choking on it; 
-forecast lead=&fcst_hrz_increments out=&_out. id=&date_var. interval=day noprint;
-run;
-%let t1= %sysfunc(datetime()); %put TIME: time elapsed = %sysevalf(&t1 - &t0);
-*each module must paste on to its output the info about each run;
-data &_out.;
-set &_out.(keep=&date_var. &voi. forecast where=(&voi=.));
-model_spec="ARIMA_p1_q1_d&dif._x0";
-in_data="&_in.";
-run; 
-
-%mend arima;
 
 
 
@@ -190,14 +146,13 @@ run;
 		run;
 	%end;
 	%else %if %sysevalf(&modtech="arima",boolean) %then %do;
-	   %local dif; %let dif=0; *temporary, needs major cleaning and planning;
+	   %local dif; %let dif=0; 
 		proc arima data=&_in.  plots=(none);
 		identify var=&voi.(&dif.) nlag=10 noprint;
 		estimate p=1 q=1 noprint;  *option to have short=3 mean 1-1 but others allow other 
 		lags (ie meaningful model). Also could have short>1 mean hpf, with 3 being more choking on it; 
 		forecast lead=&fcst_hrz_increments out=&_out. id=&date_var. interval=day noprint;
 		run;
-		*each module must paste on to its output the info about each run;
 		data &_out.;
 		set &_out.(keep=&date_var. &voi. forecast where=(&voi=.));
 		model_spec="ARIMA_p1_q1_d&dif._x0";
