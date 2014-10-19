@@ -14,6 +14,11 @@
 
 
 
+*goal is to have the process look like this: %prediag, then %module then %postdiag then %postprocess then %postdiag
+where prediag has adfs and spectral and probably jittering (since want it to be dynamic based on mean and variance etc)
+and postdiag keeps track of results such as the KS stat as well as displaying graphs and postproc implements winsorizing and
+the idea that the second best holdout accuracy is the best generalizer;
+
 
 
 
@@ -28,7 +33,7 @@ clone this so that this becomes ShitCommCont, spawning ShitCommOrd, ShitCommNom
    -one pro is that template (i.e. housekeeping) could be easily changed
    -major con would be model-specific api and architecture needs (e.g. esm noX, arima own lags, ML need more hand holding)
 test use of my obs utility (borrowed from GLARIMA)
-***voi needs to be consolidated UP to TOP, as does date_var (consider use of a control ds)
+***move esm in
 
 ARIMA:
 *may go with hpfdiag for differencing etc
@@ -48,9 +53,7 @@ ARIMA:
 
 
 *central housekeeping/flow vars used over all comm members to 
-  streamline each buckshot, side benefit these dont have to go into every _out
-
-let justone_xvar=gdp;
+  streamline each buckshot, side benefit these dont have to go into every _out;
 proc datasets lib=work kill noprint nolist; run; quit;
 
 libname ts 'C:\Users\anhutz\Desktop\msa\TimeSeries\CLASS\class_data';
@@ -65,7 +68,7 @@ run;
 %let voi0=lair;  
 *build out lags list here, will require spectral, before any modules run;
 %let lags0=&voi0._1_1 &voi0._1_3 &voi0._1_8;
-*temporarily defining datevar just like voi.  plan to use an architecture ds, possibly search the basedata input to dynamically find the datevar...?;
+*temporarily defining datevar just like voi.  plan to use an architecture ds;
 %let date_var=proxy_dt_trend;
 
 *restart the run count;
@@ -101,8 +104,8 @@ run;
 %local t0 t1;
 %let t0= %sysfunc(datetime());
 proc esm data=&_in. lead=&fcst_hrz_increments. out=&_out. nooutall;* print=all plot=all;
-	id &date_var. interval=day; *as i recall interv does weird stuff with method;
-	forecast &voi.     /*yep, cant bs esm on date_var, if you want decent HW results*/
+	id &date_var. interval=day; 
+	forecast &voi.     
           / 
              %if &shortness=1 %then model=winters   ;
              %if &shortness=2 %then model=seasonal   ;
@@ -136,7 +139,7 @@ run;
 %let this_model=MODELTYPE_sh&shortness._modelspecificparms;
 %let t0= %sysfunc(datetime());
 *INSERT MODTECH HERE;
-	%if %sysevalf(&modtech="means",boolean) %then %do;
+	%if %sysevalf(&modtech=means,boolean) %then %do;
 		proc means data=&_in;
 		output out=&_out.;
 		run; 
@@ -145,7 +148,7 @@ run;
 		&date_var.=19000+_n_;
 		run;
 	%end;
-	%else %if %sysevalf(&modtech="arima",boolean) %then %do;
+	%else %if %sysevalf(&modtech=arima,boolean) %then %do;
 	   %local dif; %let dif=0; 
 		proc arima data=&_in.  plots=(none);
 		identify var=&voi.(&dif.) nlag=10 noprint;
@@ -157,6 +160,7 @@ run;
 		set &_out.(keep=&date_var. &voi. forecast where=(&voi=.));
 		model_spec="ARIMA_p1_q1_d&dif._x0";
 		in_data="&_in.";
+		&voi.=forecast;
 		run; 
 	%end;
 %let t1= %sysfunc(datetime()); 
@@ -211,8 +215,6 @@ elapsed_time=%sysevalf(&t1 - &t0);
 run;
 proc append base=time_table data=single_time force; run; 
 
-*diagnostic, postproc e.g. date?;
-
 
 *iterate amper run, needs to be at the end of the module in case any housekeeping would like to use it;
 %let run=%eval(&run+1);
@@ -247,33 +249,7 @@ data gexpand(keep=trend datetime lz21 avgtemp);
 set gexpand(where=(&ForecastSeries.^=.));* to have nontriv (bc GEF has miss at end to forecast, Tao held true holdout) ;
 run;
 
-%arima(_in=orig_3yr,      /*input dataset*/
-              _out=work.testdev1,     /*output dataset*/
-			  voi=&voi0.,/*string, name of response variable*/
-              lags=notusedbyarima,     /*lags_VAR list notusedbyarima*/
-			  x_flag=0,  /*0 we do NOT use an exovar, 1 we do*/
-			  x=,        /*string, name of exogenous variable(s?)*/  
-              shortness=notusedbyarima,
-              date_var=proxy_dt_trend, 
 
-			  /*ARIMA-specific*/
-              dif=0);
-
-
-%esm(_in=orig_3yr,  
-              _out=esm3,     
-			  voi=&voi0.,
-              date_var=proxy_dt_trend, 
-              shortness=3);
-
-
-
-*TIMEing;  
-			  %esm(_in=gexpand,  
-              _out=esm_tim,     
-			  voi=lz21,
-              date_var=trend, 
-              shortness=2);
 
 *
              %if &shortness=1 %then model=winters   
