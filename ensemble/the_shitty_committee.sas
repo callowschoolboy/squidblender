@@ -133,7 +133,7 @@ run;
               lags=&lags0.,     /*space delimited numeric lags representing VAR list*/
 			  x_flag=0,  /*0 we do NOT use an exovar, 1 we do*/
 			  x=,        /*string, name of exogenous variable(s?)*/ 
-              date_var=, 
+              date_var=&date_var, 
               shortness= );/*1=medium, 2=short 3=very short*/
 %local this_model t0 t1;
 %let this_model=MODELTYPE_sh&shortness._modelspecificparms;
@@ -162,6 +162,16 @@ run;
 		in_data="&_in.";
 		&voi.=forecast;
 		run; 
+	%end;
+	%else %if %sysevalf(&modtech=neural,boolean) %then %do;
+		ods exclude performanceinfo details;
+		proc hpneural data=&_in.;
+		input &lags.;
+		target &voi.;
+		id &date_var.;
+		hidden 2;
+		train;
+		run;	
 	%end;
 %let t1= %sysfunc(datetime()); 
 %put TIME: time elapsed = %sysevalf(&t1 - &t0);
