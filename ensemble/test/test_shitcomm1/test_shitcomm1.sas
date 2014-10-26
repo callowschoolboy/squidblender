@@ -67,14 +67,18 @@ run;
 %let catch_baseline0=&sysinfo;
 %put catch_baseline0=&catch_baseline0;
 
-proc copy in=work out=benches; select time_table whatevah_w; run; 
+
 *and lastly just compare to bench of same plus timer_table;
 libname benches 'C:\Users\anhutz\Desktop\msa\nonTS projects\ensemble\test\test_shitcomm1';
-proc compare data=benches.whatevah_w compare=whatevah_w criteria=1e-12 method=relative(1e-9); run;
+proc compare data=benches.whatevah_w compare=whatevah_w criteria=1e-12 method=relative(1e-9); 
+var in_data_1 lair_1 model_spec_1 proxy_dt_trend;  *excluded elapsed_time_1, should not differ by more than .05 seconds, e.g. should not be higher than .12 seconds; 
+run;
 %let catch_wide=&sysinfo;
 %put catch_wide=&catch_wide;
 
-proc compare data=benches.time_table compare=time_table; run;
+proc compare data=benches.time_table compare=time_table; 
+var basedata fcst_hrz_increments in_data model_spec obs voi0; *same, exclude from comparison elapsed_time and start_time, latter cannot possibly match;
+run;
 %let catch_time=&sysinfo;
 %put catch_time=&catch_time;
 
