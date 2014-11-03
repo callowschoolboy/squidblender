@@ -29,7 +29,9 @@ data long_append;
 length &date_var. &voi0. 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
 if _n_<1 then output;
 run;
-
+data wide_merge;
+if _n_<1 then output;
+run;
 
 options mprint mprintnest mlogic mlogicnest nosymbolgen source notes;
 %module(modtech=arima,_in=orig_3yr,_out=whatevah,date_var=proxy_dt_trend,shortness=1);
@@ -88,3 +90,7 @@ if &catch_wide_long^=16 or &catch_baseline0^=0 or &catch_wide^=0 or &catch_time^
 end;
 else put "Test PASSED.";
 run;
+
+/*to rebench:
+
+proc copy in=work out=benches; select _____; run; quit;

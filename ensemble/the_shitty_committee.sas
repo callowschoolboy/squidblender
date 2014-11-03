@@ -84,7 +84,9 @@ data long_append;
 length &date_var. &voi0. 8 model_spec $ 250 in_data $ 40 elapsed_time 8;
 if _n_<1 then output;
 run;
-
+data wide_merge;
+if _n_<1 then output;
+run;
 
 
 
@@ -103,22 +105,9 @@ run;
               shortness= );/*1=medium=triple/HW, 2=short 3=very short=plain*/
 %local t0 t1;
 %let t0= %sysfunc(datetime());
-proc esm data=&_in. lead=&fcst_hrz_increments. out=&_out. nooutall;* print=all plot=all;
-	id &date_var. interval=day; 
-	forecast &voi.     
-          / 
-             %if &shortness=1 %then model=winters   ;
-             %if &shortness=2 %then model=seasonal   ;
-             %if &shortness=3 %then model=linear   ;
-          ; 
-run;
+
 %let t1= %sysfunc(datetime()); %put TIME: time elapsed = %sysevalf(&t1 - &t0);
-*each module must paste on to its output the info about each run;
-data &_out.;
-set &_out.(keep=&date_var. &voi.);
-model_spec="ESM_sh&shortness.";
-in_data="&_in.";
-run; 
+
 %mend esm;
 
 
@@ -136,7 +125,7 @@ run;
               date_var=&date_var, 
               shortness= );/*1=medium, 2=short 3=very short*/
 %local this_model t0 t1;
-%let this_model=MODELTYPE_sh&shortness._modelspecificparms;
+%let this_model=&modtech._sh&shortness._modelspecificparms;
 %let t0= %sysfunc(datetime());
 *INSERT MODTECH HERE;
 	%if %sysevalf(&modtech=means,boolean) %then %do;
@@ -172,6 +161,17 @@ run;
 		hidden 2;
 		train;
 		run;	
+	%end;
+	%else %if %sysevalf(&modtech=esm,boolean) %then %do;
+		proc esm data=&_in. lead=&fcst_hrz_increments. out=&_out. nooutall;* print=all plot=all;
+		id &date_var. interval=day; 
+		forecast &voi.     
+	          / 
+	             %if &shortness=1 %then model=winters   ;
+	             %if &shortness=2 %then model=seasonal   ;
+	             %if &shortness=3 %then model=linear   ;
+	          ; 
+		run;
 	%end;
 %let t1= %sysfunc(datetime()); 
 %put TIME: time elapsed = %sysevalf(&t1 - &t0);
@@ -210,6 +210,10 @@ set &_out.(/*keep all?*/ rename=(&voi.=&voi._&run.
            );
 length model_spec_&run. $ 250 in_data_&run. $ 40;
 *might thin this to just voi, if macvars or another alternative to data-based housekeeping works well;
+run;
+
+data wide_merge;
+merge wide_merge &_out._w;
 run;
 
  *time table;
