@@ -1,7 +1,6 @@
 
-* -modules for each model type (some of which will be variant calls of, say, a neural net module (i.e. by shortness, shortness affects model architecture)) 
-  -allowing variation over inputs plugged in.  
-  -Each module run pushes results table (each of which MIGHT have the primary key of time along with housekeeping (minimum: a col for model technology and another for which input))  ;
+*  -plan to create a preproc macro that allows variation over inputs plugged in (jitter, subsetting (latter is HARD bc of choppy timeline management)).  
+  -Each module run pushes results table (each of which MIGHT have the primary key of time along with housekeeping (minimum: columns FULLY SPECIFYING model technology and which input, may require Frogger type highly normalized tables))  ;
 
 *  -all my possible uses are time series
    --can just pass in the response variables name as a string and having a convention for appellations to that.  E.g. let voi=price , with the 
@@ -26,14 +25,9 @@ the idea that the second best holdout accuracy is the best generalizer;
 shortness effect on flow of ARIMA
 ?add exo var list to housekeeping in _out or at the top?
 what is shortness 3 for esm? 
-MERGE (NOT AppeNd, or rather both in a 2D thing) to central results (per problem run aka buckshot) each time
- -what does 2D PUSHing mean for time: temp fix was to add it to results tables and append to long but not to wide, plan to have a wide time table
 clone this so that this becomes ShitCommCont, spawning ShitCommOrd, ShitCommNom
-  consider carefully plugging each model into template
-   -one pro is that template (i.e. housekeeping) could be easily changed
-   -major con would be model-specific api and architecture needs (e.g. esm noX, arima own lags, ML need more hand holding)
+-
 test use of my obs utility (borrowed from GLARIMA)
-***move esm in
 
 ARIMA:
 *may go with hpfdiag for differencing etc
@@ -87,28 +81,6 @@ run;
 data wide_merge;
 if _n_<1 then output;
 run;
-
-
-
-/*********** FINISHED MODULES **************/
-
-
-
-
-%macro esm(_in=,      /*input dataset*/
-              _out=,     /*output dataset*/
-			  voi=&voi0.,/*string, name of response variable*/
-                         /*LAGS Not Applicable for ESM*/
-                         /*EXO Not Applicable for ESM*/
-                         /*EXO Not Applicable for ESM*/
-              date_var=, 
-              shortness= );/*1=medium=triple/HW, 2=short 3=very short=plain*/
-%local t0 t1;
-%let t0= %sysfunc(datetime());
-
-%let t1= %sysfunc(datetime()); %put TIME: time elapsed = %sysevalf(&t1 - &t0);
-
-%mend esm;
 
 
 
@@ -233,54 +205,3 @@ proc append base=time_table data=single_time force; run;
 *iterate amper run, needs to be at the end of the module in case any housekeeping would like to use it;
 %let run=%eval(&run+1);
 %mend module;
-
-   /*** ACTIVE DEVELOPMENT ****/
-
-options mprint mprintnest mlogic mlogicnest nosymbolgen source notes;
-%module(modtech=arima,_in=orig_3yr,_out=whatevah,date_var=proxy_dt_trend,shortness=1);
-
-
-%let _in=orig_3yr;  
- %let     _out=esm3;     
-%let   voi=&voi0.;
- %let     date_var=proxy_dt_trend; 
- %let    shortness=3;
-
-
- proc svm;
- run;
-
-
-
-   /*** EXAMPLES ****/
-
-
-
-%let ForecastSeries = lz21;
-libname g 'C:\Users\anhutz\Desktop\msa\TimeSeries\PROJECTS\GEFCom2012\data';
-proc expand data=g.gef out=gexpand; convert &ForecastSeries.; run; quit; 
-data gexpand(keep=trend datetime lz21 avgtemp);
-set gexpand(where=(&ForecastSeries.^=.));* to have nontriv (bc GEF has miss at end to forecast, Tao held true holdout) ;
-run;
-
-
-
-*
-             %if &shortness=1 %then model=winters   
-             %if &shortness=2 %then model=seasonal   
-             %if &shortness=3 %then model=linear   
- on airline, with plots is about .3 sec, without down to about 1/10th of that
-	airline esm sh1		.02999997138977
-	airline esm sh2		.02999997138977
-	airline esm sh3		.02999997138977
-
-*gef (5yr 15-min, fcsting 2000 increments):
-esm sh1		.
-esm sh2		.06299996376037
-esm sh3		.06599998474121
-;
-
-
-
-
-
